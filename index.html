@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>跳一跳闯关</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            background: linear-gradient(180deg, #87CEFA, #E0F7FA);
+            font-family: system-ui, sans-serif;
+            touch-action: none;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .ui-box {
+            position: fixed;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+        }
+        .score-text {
+            font-size: 22px;
+            color: #222;
+            font-weight: bold;
+        }
+        .level-text {
+            font-size: 16px;
+            margin-top:4px;
+            color:#444;
+        }
+        .game-over-panel{
+            position:fixed;
+            top:50%;
+            left:50%;
+            transform:translate(-50%,-50%);
+            background:#ffffffdd;
+            padding:30px 24px;
+            border-radius:16px;
+            text-align:center;
+            display:none;
+            min-width:260px;
+        }
+        .game-over-panel h2{
+            margin-bottom:12px;
+        }
+        .restart-btn{
+            margin-top:16px;
+            padding:10px 24px;
+            font-size:17px;
+            border:none;
+            background:#2196F3;
+            color:white;
+            border-radius:8px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div class="ui-box">
+        <div class="score-text">分数：<span id="scoreVal">0</span></div>
+        <div class="level-text">关卡：<span id="levelVal">1</span></div>
+    </div>
+    <div class="game-over-panel" id="overPanel">
+        <h2>游戏结束</h2>
+        <p>得分：<span id="finalScore">0</span></p>
+        <p>到达关卡：<span id="finalLevel">1</span></p>
+        <button class="restart-btn" id="restartBtn">重新开始</button>
+    </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let score = 0;
+let level = 1;
+let isGameOver = false;
+
+// 玩家方块
+const player = {
+    x:0,
+    y:0,
+    w:24,
+    h:36,
+    vx:0,
+    vy:0,
+    onGround:true
+};
+
+let platforms = [];
+let holdStartTime = 0;
+let isHolding = false;
+let power = 0;
+const maxPower = 700;
+
+// 适配画布尺寸
+function resizeCanvas(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize',resizeCanvas);
+
+// 生成平台
+function createPlatform(startX){
+    const pw = 50 + Math.random()*40;
+    const gap = 60 + Math.random()*(70+level*6);
+    return {
+        x: startX + gap,
+        y: canvas.height * 0.65,
+        w: pw,
+        h:22,
+        color: `hsl(${Math.random()*360},55%,60%)`
+    }
+}
+
+// 初始化游戏
+function initGame(){
+    score = 0;
+    level = 1;
+    isGameOver = false;
+    platforms = [];
+
+    const first = {
+        x: canvas.width*0.25,
+        y: canvas.height*0.65,
+        w:70,
+        h:22,
+        color:"#3498db"
+    };
+    platforms.push(first);
+    for(let i=0;i<6;i++){
+        platforms.push(createPlatform(platforms[platforms.length-1].x));
+    }
+    player.x = first.x + first.w/2 - player.w/2;
+    player.y = first.y - player.h;
+    player.vx = 0;
+    player.vy =0;
+    player.onGround = true;
+
+    document.getElementById("overPanel").style.display="none";
+    updateUi();
+}
+
+function updateUi(){
+    document.getElementById("scoreVal").innerText = score;
+    document.getElementById("levelVal").innerText = level;
+}
+
+// 蓄力开始
+function startHold(){
+    if(isGameOver || !player.onGround) return;
+    isHolding = true;
+    holdStartTime = performance.now();
+}
+
+// 释放跳跃
+function endHold(){
+    if(!isHolding || isGameOver){
+        isHolding=false;
+        power=0;
+        return;
+    }
+    const dt = performance.now() - holdStartTime;
+    power = Math.min(dt,maxPower);
+    const scale = power / maxPower;
+
+    player.vx = 4.2 * scale;
+    player.vy = -10 * scale;
+    player.onGround = false;
+
+    isHolding = false;
+    power = 0;
+}
+
+// 物理更新
+function physics(){
+    if(isGameOver) return;
+    if(isHolding && player.onGround){
+        const dt = performance.now() - holdStartTime;
+        power = Math.min(dt,maxPower);
+    }
+
+    if(!player.onGround){
+        player.vy +=0.42;
+        player.x += player.vx;
+        player.y += player.vy;
+        player.vx *=0.995;
+    }
+
+    player.onGround = false;
+    for(let plat of platforms){
+        if(player.vy>=0
+            && player.x+player.w > plat.x
+            && player.x < plat.x+plat.w
+            && player.y+player.h >= plat.y
+            && player.y+player.h <= plat.y+14){
+
+            player.y = plat.y - player.h;
+            player.vy = 0;
+            player.vx = 0;
+            player.onGround = true;
+
+            // 跳到平台中心加分
+            const centerP = player.x + player.w/2;
+            const centerPlat = plat.x + plat.w/2;
+            const dis = Math.abs(centerP-centerPlat);
+            if(dis < 12){
+                score +=2;
+            }else{
+                score +=1;
+            }
+
+            // 推进关卡，生成新平台
+            const lastPlat = platforms[platforms.length-1];
+            if(plat === lastPlat){
+                platforms.push(createPlatform(lastPlat.x));
+                level +=1;
+                updateUi();
+            }
+            break;
+        }
+    }
+
+    // 掉落判定
+    if(player.y > canvas.height + 80){
+        gameOver();
+    }
+
+    // 镜头跟随
+    const targetCamX = player.x - canvas.width *0.35;
+}
+
+function gameOver(){
+    isGameOver = true;
+    document.getElementById("finalScore").innerText = score;
+    document.getElementById("finalLevel").innerText = level;
+    document.getElementById("overPanel").style.display="block";
+}
+
+function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // 计算视口偏移，让画面跟着玩家向右滚动
+    let camX = player.x - canvas.width *0.35;
+
+    ctx.save();
+    ctx.translate(-camX,0);
+
+    // 绘制平台
+    for(let p of platforms){
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.roundRect(p.x,p.y,p.w,p.h,6);
+        ctx.fill();
+    }
+
+    // 绘制玩家小人
+    ctx.fillStyle="#222222";
+    ctx.fillRect(player.x,player.y,player.w,player.h);
+
+    // 蓄力指示条
+    if(isHolding && player.onGround){
+        const pw = power/maxPower *44;
+        ctx.fillStyle="#ff4444";
+        ctx.fillRect(player.x, player.y-12, pw,6);
+    }
+
+    ctx.restore();
+}
+
+function loop(){
+    physics();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+// 鼠标事件
+canvas.addEventListener('mousedown',startHold);
+canvas.addEventListener('mouseup',endHold);
+canvas.addEventListener('mouseleave',endHold);
+
+// 触摸事件（手机）
+canvas.addEventListener('touchstart',(e)=>{
+    e.preventDefault();
+    startHold();
+});
+canvas.addEventListener('touchend',(e)=>{
+    e.preventDefault();
+    endHold();
+});
+canvas.addEventListener('touchcancel',endHold);
+
+document.getElementById("restartBtn").addEventListener("click",initGame);
+
+initGame();
+loop();
+</script>
+</body>
+</html>
