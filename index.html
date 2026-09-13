@@ -63,10 +63,24 @@
             color:white;
             border-radius:8px;
         }
+        /*音乐按钮*/
+        .music-btn{
+            position:fixed;
+            top:22px;
+            right:16px;
+            width:40px;
+            height:40px;
+            border-radius:50%;
+            border:none;
+            background:#ffffffbb;
+            font-size:20px;
+            cursor:pointer;
+        }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
+    <button class="music-btn" id="musicBtn">🔊</button>
     <div class="ui-box">
         <div class="score-text">分数：<span id="scoreVal">0</span></div>
         <div class="level-text">关卡：<span id="levelVal">1</span></div>
@@ -77,14 +91,48 @@
         <p>到达关卡：<span id="finalLevel">1</span></p>
         <button class="restart-btn" id="restartBtn">重新开始</button>
     </div>
-
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-
 let score = 0;
 let level = 1;
 let isGameOver = false;
+
+// 背景音乐
+const bgm = new Audio("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
+bgm.loop = true;
+bgm.volume = 0.35;
+let musicOn = true;
+let audioStarted = false;
+const musicBtn = document.getElementById("musicBtn");
+
+//切换音乐
+musicBtn.addEventListener("click",()=>{
+    if(!audioStarted){
+        bgm.play();
+        audioStarted=true;
+        musicOn=true;
+        musicBtn.innerText="🔊";
+        return;
+    }
+    musicOn = !musicOn;
+    if(musicOn){
+        bgm.play();
+        musicBtn.innerText="🔊";
+    }else{
+        bgm.pause();
+        musicBtn.innerText="🔇";
+    }
+});
+
+// 用户第一次点击画布时启动音频（浏览器策略）
+function tryStartAudio(){
+    if(!audioStarted && musicOn){
+        bgm.play().then(()=>{
+            audioStarted=true;
+        }).catch(e=>{});
+    }
+}
 
 // 玩家方块
 const player = {
@@ -96,12 +144,14 @@ const player = {
     vy:0,
     onGround:true
 };
-
 let platforms = [];
 let holdStartTime = 0;
 let isHolding = false;
 let power = 0;
 const maxPower = 700;
+
+// 记录上一次踩过的平台索引，防止重复加分
+let lastStepIndex = 0;
 
 // 适配画布尺寸
 function resizeCanvas(){
@@ -130,6 +180,7 @@ function initGame(){
     level = 1;
     isGameOver = false;
     platforms = [];
+    lastStepIndex = 0;
 
     const first = {
         x: canvas.width*0.25,
@@ -159,6 +210,7 @@ function updateUi(){
 
 // 蓄力开始
 function startHold(){
+    tryStartAudio();
     if(isGameOver || !player.onGround) return;
     isHolding = true;
     holdStartTime = performance.now();
@@ -174,11 +226,9 @@ function endHold(){
     const dt = performance.now() - holdStartTime;
     power = Math.min(dt,maxPower);
     const scale = power / maxPower;
-
-    player.vx = 4.2 * scale;
-    player.vy = -10 * scale;
+    player.vx = 4.4 * scale;
+    player.vy = -10.5 * scale;
     player.onGround = false;
-
     isHolding = false;
     power = 0;
 }
@@ -186,6 +236,7 @@ function endHold(){
 // 物理更新
 function physics(){
     if(isGameOver) return;
+
     if(isHolding && player.onGround){
         const dt = performance.now() - holdStartTime;
         power = Math.min(dt,maxPower);
@@ -199,32 +250,34 @@ function physics(){
     }
 
     player.onGround = false;
-    for(let plat of platforms){
+    // 碰撞平台
+    for(let i=0;i<platforms.length;i++){
+        const plat = platforms[i];
         if(player.vy>=0
             && player.x+player.w > plat.x
             && player.x < plat.x+plat.w
             && player.y+player.h >= plat.y
-            && player.y+player.h <= plat.y+14){
-
+            && player.y+player.h <= plat.y+18){
             player.y = plat.y - player.h;
             player.vy = 0;
             player.vx = 0;
             player.onGround = true;
 
-            // 跳到平台中心加分
-            const centerP = player.x + player.w/2;
-            const centerPlat = plat.x + plat.w/2;
-            const dis = Math.abs(centerP-centerPlat);
-            if(dis < 12){
-                score +=2;
-            }else{
-                score +=1;
-            }
-
-            // 推进关卡，生成新平台
-            const lastPlat = platforms[platforms.length-1];
-            if(plat === lastPlat){
-                platforms.push(createPlatform(lastPlat.x));
+            // 只有跳到新平台才加分
+            if(i > lastStepIndex){
+                lastStepIndex = i;
+                const centerP = player.x + player.w/2;
+                const centerPlat = plat.x + plat.w/2;
+                const dis = Math.abs(centerP-centerPlat);
+                if(dis < 12){
+                    score +=2;
+                }else{
+                    score +=1;
+                }
+                // 每跳上新平台，生成后续平台
+                while(platforms.length < i+7){
+                    platforms.push(createPlatform(platforms[platforms.length-1].x));
+                }
                 level +=1;
                 updateUi();
             }
@@ -232,13 +285,18 @@ function physics(){
         }
     }
 
-    // 掉落判定
-    if(player.y > canvas.height + 80){
+    // 清理屏幕左侧已经跑出去的旧平台，防止数组无限增大
+    const camX = player.x - canvas.width *0.35;
+    platforms = platforms.filter(p=> p.x + p.w > camX - 200);
+
+    // 同步修正 lastStepIndex
+    const removeCount = lastStepIndex - (platforms.findIndex(p=>p.x+ p.w > camX -200));
+    if(removeCount>0) lastStepIndex -= removeCount;
+
+    // 掉落判定：掉下面，或者跑出屏幕左边
+    if(player.y > canvas.height + 80 || player.x + player.w < camX - 100){
         gameOver();
     }
-
-    // 镜头跟随
-    const targetCamX = player.x - canvas.width *0.35;
 }
 
 function gameOver(){
@@ -250,10 +308,8 @@ function gameOver(){
 
 function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    // 计算视口偏移，让画面跟着玩家向右滚动
-    let camX = player.x - canvas.width *0.35;
-
+    // 相机偏移
+    const camX = player.x - canvas.width *0.35;
     ctx.save();
     ctx.translate(-camX,0);
 
@@ -275,7 +331,6 @@ function draw(){
         ctx.fillStyle="#ff4444";
         ctx.fillRect(player.x, player.y-12, pw,6);
     }
-
     ctx.restore();
 }
 
