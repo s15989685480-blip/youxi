@@ -153,11 +153,12 @@ function tryStartAudio() {
     }
 }
 
-// 玩家头像标志
+// 玩家：改回黑色竖条
 const player = {
     x: 0,
     y: 0,
-    r: 18,
+    w: 24,
+    h: 36,
     vx: 0,
     vy: 0,
     onGround: true
@@ -246,8 +247,8 @@ function initGame() {
         platforms.push(createPlatform(platforms[platforms.length - 1].x));
     }
 
-    player.x = first.x + first.w / 2;
-    player.y = first.y - player.r;
+    player.x = first.x + first.w / 2 - player.w / 2;
+    player.y = first.y - player.h;
     player.vx = 0;
     player.vy = 0;
     player.onGround = true;
@@ -320,12 +321,12 @@ function physics() {
         if (plat.breaking) continue;
 
         if (player.vy >= 0 &&
-            player.x + player.r > plat.x &&
-            player.x - player.r < plat.x + plat.w &&
-            player.y + player.r >= plat.y &&
-            player.y + player.r <= plat.y + 18) {
+            player.x + player.w > plat.x &&
+            player.x < plat.x + plat.w &&
+            player.y + player.h >= plat.y &&
+            player.y + player.h <= plat.y + 18) {
 
-            player.y = plat.y - player.r;
+            player.y = plat.y - player.h;
             player.vy = 0;
             player.vx = 0;
             player.onGround = true;
@@ -336,7 +337,7 @@ function physics() {
 
             if (plat.id !== steppedPlatId) {
                 steppedPlatId = plat.id;
-                const centerP = player.x;
+                const centerP = player.x + player.w / 2;
                 const centerPlat = plat.x + plat.w / 2;
                 const dis = Math.abs(centerP - centerPlat);
 
@@ -364,7 +365,7 @@ function physics() {
     const camX = player.x - canvas.width * 0.35;
     platforms = platforms.filter(p => p.x + p.w > camX - 200);
 
-    if (player.y > canvas.height + 80 || player.x + player.r < camX - 100) {
+    if (player.y > canvas.height + 80 || player.x + player.w < camX - 100) {
         gameOver();
     }
 }
@@ -374,41 +375,6 @@ function gameOver() {
     document.getElementById("finalScore").innerText = score;
     document.getElementById("finalLevel").innerText = level;
     document.getElementById("overPanel").style.display = "block";
-}
-
-function drawAvatar(cx, cy, radius) {
-    // 外圈
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fillStyle = "#ffd36e";
-    ctx.fill();
-    ctx.strokeStyle = "#2c3e50";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // 眼睛
-    ctx.fillStyle = "#222";
-    ctx.beginPath();
-    ctx.arc(cx - 6, cy - 2, 3, 0, Math.PI * 2);
-    ctx.arc(cx + 6, cy - 2, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 笑脸
-    ctx.beginPath();
-    ctx.strokeStyle = "#222";
-    ctx.lineWidth = 2;
-    ctx.arc(cx, cy + 2, 6, 0, Math.PI);
-    ctx.stroke();
-
-    // 蓄力时红色光圈
-    if (isHolding && player.onGround) {
-        const pw = power / maxPower;
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius + 6 + pw * 8, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255, 68, 68, ${0.4 + pw * 0.6})`;
-        ctx.lineWidth = 3;
-        ctx.stroke();
-    }
 }
 
 function draw() {
@@ -429,8 +395,15 @@ function draw() {
         ctx.globalAlpha = 1;
     }
 
-    // 玩家头像标志
-    drawAvatar(player.x, player.y, player.r);
+    // 改回黑色竖条
+    ctx.fillStyle = "#222222";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+
+    if (isHolding && player.onGround) {
+        const pw = power / maxPower;
+        ctx.fillStyle = "#ff4444";
+        ctx.fillRect(player.x + 4, player.y - 12, (player.w - 8) * pw, 6);
+    }
 
     ctx.restore();
 }
@@ -462,4 +435,3 @@ loop();
 </script>
 </body>
 </html>
-
