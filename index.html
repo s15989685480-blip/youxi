@@ -63,7 +63,6 @@
             color:white;
             border-radius:8px;
         }
-        /*音乐按钮*/
         .music-btn{
             position:fixed;
             top:22px;
@@ -97,6 +96,9 @@ const ctx = canvas.getContext('2d');
 let score = 0;
 let level = 1;
 let isGameOver = false;
+let globalPlatId = 0;
+let steppedPlatId = -1;
+const SCORE_PER_LEVEL = 500;
 
 // 背景音乐
 const bgm = new Audio("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
@@ -106,7 +108,6 @@ let musicOn = true;
 let audioStarted = false;
 const musicBtn = document.getElementById("musicBtn");
 
-//切换音乐
 musicBtn.addEventListener("click",()=>{
     if(!audioStarted){
         bgm.play();
@@ -125,16 +126,12 @@ musicBtn.addEventListener("click",()=>{
     }
 });
 
-// 用户第一次点击画布时启动音频（浏览器策略）
 function tryStartAudio(){
     if(!audioStarted && musicOn){
-        bgm.play().then(()=>{
-            audioStarted=true;
-        }).catch(e=>{});
+        bgm.play().catch(e=>{});
     }
 }
 
-// 玩家方块
 const player = {
     x:0,
     y:0,
@@ -150,12 +147,6 @@ let isHolding = false;
 let power = 0;
 const maxPower = 700;
 
-// 记录上一次踩过的平台索引，防止重复加分
-let lastStepIndex = 0;
-// 每跳满这个数量升级关卡，你可以修改这个数字
-const STEP_PER_LEVEL = 5;
-
-// 适配画布尺寸
 function resizeCanvas(){
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -163,34 +154,67 @@ function resizeCanvas(){
 resizeCanvas();
 window.addEventListener('resize',resizeCanvas);
 
-// 生成平台（难度随level变化）
+//生成平台，增加移动、易碎、高度随机
 function createPlatform(startX){
+    globalPlatId++;
     const baseGap = 70 + level * 6;
-    const pw = Math.max(35, 50 + Math.random()*40 - level*2); //等级越高平台越窄
+    const pw = Math.max(35, 50 + Math.random()*40 - level*2);
     const gap = 60 + Math.random()*baseGap;
-    return {
+    const baseY = canvas.height * 0.65;
+    //高度随机起伏
+    const yOffset = (Math.random()-0.5)*80;
+    let plat = {
+        id: globalPlatId,
         x: startX + gap,
-        y: canvas.height * 0.65,
+        y: baseY + yOffset,
+        originY: baseY + yOffset,
         w: pw,
         h:22,
-        color: `hsl(${Math.random()*360},55%,60%)`
+        color: `hsl(${Math.random()*360},55%,60%)`,
+        isMoving:false,
+        moveDir:1,
+        moveRange:45,
+        moveSpeed:1.2,
+        isFragile:false,
+        fragTimer:0,
+        breaking:false
+    };
+
+    //Lv3之后概率生成移动平台
+    if(level >=3 && Math.random() <0.35){
+        plat.isMoving = true;
     }
+    //Lv5之后概率生成易碎红色平台
+    if(level >=5 && Math.random() <0.28){
+        plat.isFragile = true;
+        plat.color="#e74c3c";
+    }
+    return plat;
 }
 
-// 初始化游戏
 function initGame(){
     score = 0;
     level = 1;
     isGameOver = false;
+    globalPlatId = 0;
+    steppedPlatId = -1;
     platforms = [];
-    lastStepIndex = 0;
 
     const first = {
+        id: globalPlatId++,
         x: canvas.width*0.25,
         y: canvas.height*0.65,
+        originY: canvas.height*0.65,
         w:70,
         h:22,
-        color:"#3498db"
+        color:"#3498db",
+        isMoving:false,
+        moveDir:1,
+        moveRange:0,
+        moveSpeed:0,
+        isFragile:false,
+        fragTimer:0,
+        breaking:false
     };
     platforms.push(first);
     for(let i=0;i<6;i++){
@@ -211,7 +235,6 @@ function updateUi(){
     document.getElementById("levelVal").innerText = level;
 }
 
-// 蓄力开始
 function startHold(){
     tryStartAudio();
     if(isGameOver || !player.onGround) return;
@@ -219,7 +242,6 @@ function startHold(){
     holdStartTime = performance.now();
 }
 
-// 释放跳跃
 function endHold(){
     if(!isHolding || isGameOver){
         isHolding=false;
@@ -236,9 +258,25 @@ function endHold(){
     power = 0;
 }
 
-// 物理更新
 function physics(){
     if(isGameOver) return;
+
+    //更新移动平台
+    for(let p of platforms){
+        if(p.isMoving){
+            p.x += p.moveDir * p.moveSpeed;
+            if(Math.abs(p.x - (p.originX||p.x))>p.moveRange){
+                p.moveDir *= -1;
+                if(!p.originX) p.originX = p.x;
+            }
+        }
+        //易碎平台计时
+        if(p.breaking){
+            p.fragTimer +=1;
+        }
+    }
+    //移除碎裂完成的平台
+    platforms = platforms.filter(p=>!(p.breaking && p.fragTimer>35));
 
     if(isHolding && player.onGround){
         const dt = performance.now() - holdStartTime;
@@ -253,9 +291,9 @@ function physics(){
     }
 
     player.onGround = false;
-    // 碰撞平台
     for(let i=0;i<platforms.length;i++){
         const plat = platforms[i];
+        if(plat.breaking) continue;
         if(player.vy>=0
             && player.x+player.w > plat.x
             && player.x < plat.x+plat.w
@@ -266,25 +304,26 @@ function physics(){
             player.vx = 0;
             player.onGround = true;
 
-            // 只有跳到新平台才加分
-            if(i > lastStepIndex){
-                lastStepIndex = i;
+            //易碎平台踩上去开始碎裂倒计时
+            if(plat.isFragile && !plat.breaking){
+                plat.breaking=true;
+            }
+
+            if(plat.id !== steppedPlatId){
+                steppedPlatId = plat.id;
                 const centerP = player.x + player.w/2;
                 const centerPlat = plat.x + plat.w/2;
                 const dis = Math.abs(centerP-centerPlat);
-                if(dis < 12){
-                    score +=2;
+                //缩小完美判定 dis<6
+                if(dis < 6){
+                    score += 200;
                 }else{
-                    score +=1;
+                    score += 100;
                 }
-                // ✅ 修改这里：根据总跳数升级关卡，不再跳一次+1
-                const totalJump = lastStepIndex;
-                const newLevel = Math.floor(totalJump / STEP_PER_LEVEL)+1;
-                if(newLevel > level){
-                    level = newLevel;
+                const newLv = Math.floor(score / SCORE_PER_LEVEL)+1;
+                if(newLv>level){
+                    level = newLv;
                 }
-
-                // 每跳上新平台，生成后续平台
                 while(platforms.length < i+7){
                     platforms.push(createPlatform(platforms[platforms.length-1].x));
                 }
@@ -294,12 +333,10 @@ function physics(){
         }
     }
 
-    // 清理屏幕左侧已经跑出去的旧平台，防止数组无限增大
     const camX = player.x - canvas.width *0.35;
     platforms = platforms.filter(p=> p.x + p.w > camX - 200);
 
-    // 掉落判定：掉下面，或者跑出屏幕左边
-    if(player.y > canvas.height + 80 || player.x + player.w < camX - 100){
+    if(player.y > canvas.height + 80 || player.x + player.w < camX -100){
         gameOver();
     }
 }
@@ -313,24 +350,24 @@ function gameOver(){
 
 function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    // 相机偏移
     const camX = player.x - canvas.width *0.35;
     ctx.save();
     ctx.translate(-camX,0);
 
-    // 绘制平台
     for(let p of platforms){
         ctx.fillStyle = p.color;
+        if(p.breaking){
+            ctx.globalAlpha = 0.45;
+        }
         ctx.beginPath();
         ctx.roundRect(p.x,p.y,p.w,p.h,6);
         ctx.fill();
+        ctx.globalAlpha =1;
     }
 
-    // 绘制玩家小人
     ctx.fillStyle="#222222";
     ctx.fillRect(player.x,player.y,player.w,player.h);
 
-    // 蓄力指示条
     if(isHolding && player.onGround){
         const pw = power/maxPower *44;
         ctx.fillStyle="#ff4444";
@@ -345,12 +382,10 @@ function loop(){
     requestAnimationFrame(loop);
 }
 
-// 鼠标事件
 canvas.addEventListener('mousedown',startHold);
 canvas.addEventListener('mouseup',endHold);
 canvas.addEventListener('mouseleave',endHold);
 
-// 触摸事件（手机）
 canvas.addEventListener('touchstart',(e)=>{
     e.preventDefault();
     startHold();
@@ -368,3 +403,4 @@ loop();
 </script>
 </body>
 </html>
+
