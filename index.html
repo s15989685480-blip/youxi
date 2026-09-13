@@ -36,60 +36,81 @@
         }
         .level-text {
             font-size: 16px;
-            margin-top:4px;
-            color:#444;
+            margin-top: 4px;
+            color: #444;
         }
-        .game-over-panel{
-            position:fixed;
-            top:50%;
-            left:50%;
-            transform:translate(-50%,-50%);
-            background:#ffffffdd;
-            padding:30px 24px;
-            border-radius:16px;
-            text-align:center;
-            display:none;
-            min-width:260px;
+        .dev-info {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.55);
+            padding: 6px 14px;
+            border-radius: 12px;
+            font-size: 13px;
+            color: #333;
+            letter-spacing: 0.5px;
+            pointer-events: none;
+            white-space: nowrap;
         }
-        .game-over-panel h2{
-            margin-bottom:12px;
+        .game-over-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #ffffffdd;
+            padding: 30px 24px;
+            border-radius: 16px;
+            text-align: center;
+            display: none;
+            min-width: 260px;
+            z-index: 10;
         }
-        .restart-btn{
-            margin-top:16px;
-            padding:10px 24px;
-            font-size:17px;
-            border:none;
-            background:#2196F3;
-            color:white;
-            border-radius:8px;
+        .game-over-panel h2 {
+            margin-bottom: 12px;
         }
-        .music-btn{
-            position:fixed;
-            top:22px;
-            right:16px;
-            width:40px;
-            height:40px;
-            border-radius:50%;
-            border:none;
-            background:#ffffffbb;
-            font-size:20px;
-            cursor:pointer;
+        .restart-btn {
+            margin-top: 16px;
+            padding: 10px 24px;
+            font-size: 17px;
+            border: none;
+            background: #2196F3;
+            color: white;
+            border-radius: 8px;
+        }
+        .music-btn {
+            position: fixed;
+            top: 22px;
+            right: 16px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: #ffffffbb;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 5;
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
     <button class="music-btn" id="musicBtn">🔊</button>
+
     <div class="ui-box">
         <div class="score-text">分数：<span id="scoreVal">0</span></div>
         <div class="level-text">关卡：<span id="levelVal">1</span></div>
     </div>
+
+    <div class="dev-info">开发者：帅志刚 &nbsp; QQ号：376035531</div>
+
     <div class="game-over-panel" id="overPanel">
         <h2>游戏结束</h2>
         <p>得分：<span id="finalScore">0</span></p>
         <p>到达关卡：<span id="finalLevel">1</span></p>
         <button class="restart-btn" id="restartBtn">重新开始</button>
     </div>
+
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -108,94 +129,93 @@ let musicOn = true;
 let audioStarted = false;
 const musicBtn = document.getElementById("musicBtn");
 
-musicBtn.addEventListener("click",()=>{
-    if(!audioStarted){
+musicBtn.addEventListener("click", () => {
+    if (!audioStarted) {
         bgm.play();
-        audioStarted=true;
-        musicOn=true;
-        musicBtn.innerText="🔊";
+        audioStarted = true;
+        musicOn = true;
+        musicBtn.innerText = "🔊";
         return;
     }
     musicOn = !musicOn;
-    if(musicOn){
+    if (musicOn) {
         bgm.play();
-        musicBtn.innerText="🔊";
-    }else{
+        musicBtn.innerText = "🔊";
+    } else {
         bgm.pause();
-        musicBtn.innerText="🔇";
+        musicBtn.innerText = "🔇";
     }
 });
 
-function tryStartAudio(){
-    if(!audioStarted && musicOn){
-        bgm.play().catch(e=>{});
+function tryStartAudio() {
+    if (!audioStarted && musicOn) {
+        bgm.play().catch(e => {});
     }
 }
 
+// 玩家头像标志
 const player = {
-    x:0,
-    y:0,
-    w:24,
-    h:36,
-    vx:0,
-    vy:0,
-    onGround:true
+    x: 0,
+    y: 0,
+    r: 18,
+    vx: 0,
+    vy: 0,
+    onGround: true
 };
+
 let platforms = [];
 let holdStartTime = 0;
 let isHolding = false;
 let power = 0;
 const maxPower = 700;
 
-function resizeCanvas(){
+function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 }
 resizeCanvas();
-window.addEventListener('resize',resizeCanvas);
+window.addEventListener('resize', resizeCanvas);
 
-//生成平台，优化间隙，增加最大上限，不会无限变大
-function createPlatform(startX){
+function createPlatform(startX) {
     globalPlatId++;
-    // 修改：每级只+3，最大基础间隙限制在 95，不会无限增长
     const baseGap = Math.min(70 + level * 3, 95);
-    const pw = Math.max(35, 50 + Math.random()*40 - level*2);
-    const gap = 60 + Math.random()*baseGap;
+    const pw = Math.max(35, 50 + Math.random() * 40 - level * 2);
+    const gap = 60 + Math.random() * baseGap;
     const baseY = canvas.height * 0.65;
-    //高度随机起伏
-    const yOffset = (Math.random()-0.5)*80;
+    const yOffset = (Math.random() - 0.5) * 80;
+
     let plat = {
         id: globalPlatId,
         x: startX + gap,
         y: baseY + yOffset,
         originY: baseY + yOffset,
         w: pw,
-        h:22,
-        color: `hsl(${Math.random()*360},55%,60%)`,
-        isMoving:false,
-        originX:0,
-        moveDir:1,
-        moveRange:45,
-        moveSpeed:1.2,
-        isFragile:false,
-        fragTimer:0,
-        breaking:false
+        h: 22,
+        color: `hsl(${Math.random() * 360}, 55%, 60%)`,
+        isMoving: false,
+        originX: 0,
+        moveDir: 1,
+        moveRange: 45,
+        moveSpeed: 1.2,
+        isFragile: false,
+        fragTimer: 0,
+        breaking: false
     };
 
-    //Lv3之后概率生成移动平台
-    if(level >=3 && Math.random() <0.35){
+    if (level >= 3 && Math.random() < 0.35) {
         plat.isMoving = true;
         plat.originX = plat.x;
     }
-    //Lv5之后概率生成易碎红色平台
-    if(level >=5 && Math.random() <0.28){
+
+    if (level >= 5 && Math.random() < 0.28) {
         plat.isFragile = true;
-        plat.color="#e74c3c";
+        plat.color = "#e74c3c";
     }
+
     return plat;
 }
 
-function initGame(){
+function initGame() {
     score = 0;
     level = 1;
     isGameOver = false;
@@ -205,55 +225,57 @@ function initGame(){
 
     const first = {
         id: globalPlatId++,
-        x: canvas.width*0.25,
-        y: canvas.height*0.65,
-        originY: canvas.height*0.65,
-        w:70,
-        h:22,
-        color:"#3498db",
-        isMoving:false,
-        originX:0,
-        moveDir:1,
-        moveRange:0,
-        moveSpeed:0,
-        isFragile:false,
-        fragTimer:0,
-        breaking:false
+        x: canvas.width * 0.25,
+        y: canvas.height * 0.65,
+        originY: canvas.height * 0.65,
+        w: 70,
+        h: 22,
+        color: "#3498db",
+        isMoving: false,
+        originX: 0,
+        moveDir: 1,
+        moveRange: 0,
+        moveSpeed: 0,
+        isFragile: false,
+        fragTimer: 0,
+        breaking: false
     };
+
     platforms.push(first);
-    for(let i=0;i<6;i++){
-        platforms.push(createPlatform(platforms[platforms.length-1].x));
+    for (let i = 0; i < 6; i++) {
+        platforms.push(createPlatform(platforms[platforms.length - 1].x));
     }
-    player.x = first.x + first.w/2 - player.w/2;
-    player.y = first.y - player.h;
+
+    player.x = first.x + first.w / 2;
+    player.y = first.y - player.r;
     player.vx = 0;
-    player.vy =0;
+    player.vy = 0;
     player.onGround = true;
 
-    document.getElementById("overPanel").style.display="none";
+    document.getElementById("overPanel").style.display = "none";
     updateUi();
 }
 
-function updateUi(){
+function updateUi() {
     document.getElementById("scoreVal").innerText = score;
     document.getElementById("levelVal").innerText = level;
 }
 
-function startHold(){
+function startHold() {
     tryStartAudio();
-    if(isGameOver || !player.onGround) return;
+    if (isGameOver || !player.onGround) return;
     isHolding = true;
     holdStartTime = performance.now();
 }
 
-function endHold(){
-    if(!isHolding || isGameOver){
-        isHolding=false;
-        power=0;
+function endHold() {
+    if (!isHolding || isGameOver) {
+        isHolding = false;
+        power = 0;
         return;
     }
     const dt = performance.now() - holdStartTime;
-    power = Math.min(dt,maxPower);
+    power = Math.min(dt, maxPower);
     const scale = power / maxPower;
     player.vx = 4.4 * scale;
     player.vy = -10.5 * scale;
@@ -262,144 +284,178 @@ function endHold(){
     power = 0;
 }
 
-function physics(){
-    if(isGameOver) return;
+function physics() {
+    if (isGameOver) return;
 
-    //更新移动平台
-    for(let p of platforms){
-        if(p.isMoving){
+    for (let p of platforms) {
+        if (p.isMoving) {
             p.x += p.moveDir * p.moveSpeed;
-            if(Math.abs(p.x - p.originX)>p.moveRange){
+            if (Math.abs(p.x - p.originX) > p.moveRange) {
                 p.moveDir *= -1;
             }
         }
-        //易碎平台计时
-        if(p.breaking){
-            p.fragTimer +=1;
+        if (p.breaking) {
+            p.fragTimer += 1;
         }
     }
-    //移除碎裂完成的平台
-    platforms = platforms.filter(p=>!(p.breaking && p.fragTimer>35));
 
-    if(isHolding && player.onGround){
+    platforms = platforms.filter(p => !(p.breaking && p.fragTimer > 35));
+
+    if (isHolding && player.onGround) {
         const dt = performance.now() - holdStartTime;
-        power = Math.min(dt,maxPower);
+        power = Math.min(dt, maxPower);
     }
 
-    if(!player.onGround){
-        player.vy +=0.42;
+    if (!player.onGround) {
+        player.vy += 0.42;
         player.x += player.vx;
         player.y += player.vy;
-        player.vx *=0.995;
+        player.vx *= 0.995;
     }
 
     player.onGround = false;
-    for(let i=0;i<platforms.length;i++){
+
+    for (let i = 0; i < platforms.length; i++) {
         const plat = platforms[i];
-        if(plat.breaking) continue;
-        if(player.vy>=0
-            && player.x+player.w > plat.x
-            && player.x < plat.x+plat.w
-            && player.y+player.h >= plat.y
-            && player.y+player.h <= plat.y+18){
-            player.y = plat.y - player.h;
+        if (plat.breaking) continue;
+
+        if (player.vy >= 0 &&
+            player.x + player.r > plat.x &&
+            player.x - player.r < plat.x + plat.w &&
+            player.y + player.r >= plat.y &&
+            player.y + player.r <= plat.y + 18) {
+
+            player.y = plat.y - player.r;
             player.vy = 0;
             player.vx = 0;
             player.onGround = true;
 
-            //易碎平台踩上去开始碎裂倒计时
-            if(plat.isFragile && !plat.breaking){
-                plat.breaking=true;
+            if (plat.isFragile && !plat.breaking) {
+                plat.breaking = true;
             }
 
-            if(plat.id !== steppedPlatId){
+            if (plat.id !== steppedPlatId) {
                 steppedPlatId = plat.id;
-                const centerP = player.x + player.w/2;
-                const centerPlat = plat.x + plat.w/2;
-                const dis = Math.abs(centerP-centerPlat);
-                //缩小完美判定 dis<6
-                if(dis < 6){
+                const centerP = player.x;
+                const centerPlat = plat.x + plat.w / 2;
+                const dis = Math.abs(centerP - centerPlat);
+
+                if (dis < 6) {
                     score += 200;
-                }else{
+                } else {
                     score += 100;
                 }
-                const newLv = Math.floor(score / SCORE_PER_LEVEL)+1;
-                if(newLv>level){
+
+                const newLv = Math.floor(score / SCORE_PER_LEVEL) + 1;
+                if (newLv > level) {
                     level = newLv;
                 }
-                while(platforms.length < i+7){
-                    platforms.push(createPlatform(platforms[platforms.length-1].x));
+
+                while (platforms.length < i + 7) {
+                    platforms.push(createPlatform(platforms[platforms.length - 1].x));
                 }
+
                 updateUi();
             }
             break;
         }
     }
 
-    const camX = player.x - canvas.width *0.35;
-    platforms = platforms.filter(p=> p.x + p.w > camX - 200);
+    const camX = player.x - canvas.width * 0.35;
+    platforms = platforms.filter(p => p.x + p.w > camX - 200);
 
-    if(player.y > canvas.height + 80 || player.x + player.w < camX -100){
+    if (player.y > canvas.height + 80 || player.x + player.r < camX - 100) {
         gameOver();
     }
 }
 
-function gameOver(){
+function gameOver() {
     isGameOver = true;
     document.getElementById("finalScore").innerText = score;
     document.getElementById("finalLevel").innerText = level;
-    document.getElementById("overPanel").style.display="block";
+    document.getElementById("overPanel").style.display = "block";
 }
 
-function draw(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    const camX = player.x - canvas.width *0.35;
-    ctx.save();
-    ctx.translate(-camX,0);
+function drawAvatar(cx, cy, radius) {
+    // 外圈
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffd36e";
+    ctx.fill();
+    ctx.strokeStyle = "#2c3e50";
+    ctx.lineWidth = 3;
+    ctx.stroke();
 
-    for(let p of platforms){
+    // 眼睛
+    ctx.fillStyle = "#222";
+    ctx.beginPath();
+    ctx.arc(cx - 6, cy - 2, 3, 0, Math.PI * 2);
+    ctx.arc(cx + 6, cy - 2, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 笑脸
+    ctx.beginPath();
+    ctx.strokeStyle = "#222";
+    ctx.lineWidth = 2;
+    ctx.arc(cx, cy + 2, 6, 0, Math.PI);
+    ctx.stroke();
+
+    // 蓄力时红色光圈
+    if (isHolding && player.onGround) {
+        const pw = power / maxPower;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 6 + pw * 8, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 68, 68, ${0.4 + pw * 0.6})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const camX = player.x - canvas.width * 0.35;
+    ctx.save();
+    ctx.translate(-camX, 0);
+
+    for (let p of platforms) {
         ctx.fillStyle = p.color;
-        if(p.breaking){
+        if (p.breaking) {
             ctx.globalAlpha = 0.45;
         }
         ctx.beginPath();
-        ctx.roundRect(p.x,p.y,p.w,p.h,6);
+        ctx.roundRect(p.x, p.y, p.w, p.h, 6);
         ctx.fill();
-        ctx.globalAlpha =1;
+        ctx.globalAlpha = 1;
     }
 
-    ctx.fillStyle="#222222";
-    ctx.fillRect(player.x,player.y,player.w,player.h);
+    // 玩家头像标志
+    drawAvatar(player.x, player.y, player.r);
 
-    if(isHolding && player.onGround){
-        const pw = power/maxPower *44;
-        ctx.fillStyle="#ff4444";
-        ctx.fillRect(player.x, player.y-12, pw,6);
-    }
     ctx.restore();
 }
 
-function loop(){
+function loop() {
     physics();
     draw();
     requestAnimationFrame(loop);
 }
 
-canvas.addEventListener('mousedown',startHold);
-canvas.addEventListener('mouseup',endHold);
-canvas.addEventListener('mouseleave',endHold);
+canvas.addEventListener('mousedown', startHold);
+canvas.addEventListener('mouseup', endHold);
+canvas.addEventListener('mouseleave', endHold);
 
-canvas.addEventListener('touchstart',(e)=>{
+canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     startHold();
 });
-canvas.addEventListener('touchend',(e)=>{
+canvas.addEventListener('touchend', (e) => {
     e.preventDefault();
     endHold();
 });
-canvas.addEventListener('touchcancel',endHold);
+canvas.addEventListener('touchcancel', endHold);
 
-document.getElementById("restartBtn").addEventListener("click",initGame);
+document.getElementById("restartBtn").addEventListener("click", initGame);
 
 initGame();
 loop();
