@@ -154,10 +154,11 @@ function resizeCanvas(){
 resizeCanvas();
 window.addEventListener('resize',resizeCanvas);
 
-//生成平台，增加移动、易碎、高度随机
+//生成平台，优化间隙，增加最大上限，不会无限变大
 function createPlatform(startX){
     globalPlatId++;
-    const baseGap = 70 + level * 6;
+    // 修改：每级只+3，最大基础间隙限制在 95，不会无限增长
+    const baseGap = Math.min(70 + level * 3, 95);
     const pw = Math.max(35, 50 + Math.random()*40 - level*2);
     const gap = 60 + Math.random()*baseGap;
     const baseY = canvas.height * 0.65;
@@ -172,6 +173,7 @@ function createPlatform(startX){
         h:22,
         color: `hsl(${Math.random()*360},55%,60%)`,
         isMoving:false,
+        originX:0,
         moveDir:1,
         moveRange:45,
         moveSpeed:1.2,
@@ -183,6 +185,7 @@ function createPlatform(startX){
     //Lv3之后概率生成移动平台
     if(level >=3 && Math.random() <0.35){
         plat.isMoving = true;
+        plat.originX = plat.x;
     }
     //Lv5之后概率生成易碎红色平台
     if(level >=5 && Math.random() <0.28){
@@ -209,6 +212,7 @@ function initGame(){
         h:22,
         color:"#3498db",
         isMoving:false,
+        originX:0,
         moveDir:1,
         moveRange:0,
         moveSpeed:0,
@@ -265,9 +269,8 @@ function physics(){
     for(let p of platforms){
         if(p.isMoving){
             p.x += p.moveDir * p.moveSpeed;
-            if(Math.abs(p.x - (p.originX||p.x))>p.moveRange){
+            if(Math.abs(p.x - p.originX)>p.moveRange){
                 p.moveDir *= -1;
-                if(!p.originX) p.originX = p.x;
             }
         }
         //易碎平台计时
