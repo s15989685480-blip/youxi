@@ -152,6 +152,8 @@ const maxPower = 700;
 
 // 记录上一次踩过的平台索引，防止重复加分
 let lastStepIndex = 0;
+// 每跳满这个数量升级关卡，你可以修改这个数字
+const STEP_PER_LEVEL = 5;
 
 // 适配画布尺寸
 function resizeCanvas(){
@@ -161,10 +163,11 @@ function resizeCanvas(){
 resizeCanvas();
 window.addEventListener('resize',resizeCanvas);
 
-// 生成平台
+// 生成平台（难度随level变化）
 function createPlatform(startX){
-    const pw = 50 + Math.random()*40;
-    const gap = 60 + Math.random()*(70+level*6);
+    const baseGap = 70 + level * 6;
+    const pw = Math.max(35, 50 + Math.random()*40 - level*2); //等级越高平台越窄
+    const gap = 60 + Math.random()*baseGap;
     return {
         x: startX + gap,
         y: canvas.height * 0.65,
@@ -274,11 +277,17 @@ function physics(){
                 }else{
                     score +=1;
                 }
+                // ✅ 修改这里：根据总跳数升级关卡，不再跳一次+1
+                const totalJump = lastStepIndex;
+                const newLevel = Math.floor(totalJump / STEP_PER_LEVEL)+1;
+                if(newLevel > level){
+                    level = newLevel;
+                }
+
                 // 每跳上新平台，生成后续平台
                 while(platforms.length < i+7){
                     platforms.push(createPlatform(platforms[platforms.length-1].x));
                 }
-                level +=1;
                 updateUi();
             }
             break;
@@ -288,10 +297,6 @@ function physics(){
     // 清理屏幕左侧已经跑出去的旧平台，防止数组无限增大
     const camX = player.x - canvas.width *0.35;
     platforms = platforms.filter(p=> p.x + p.w > camX - 200);
-
-    // 同步修正 lastStepIndex
-    const removeCount = lastStepIndex - (platforms.findIndex(p=>p.x+ p.w > camX -200));
-    if(removeCount>0) lastStepIndex -= removeCount;
 
     // 掉落判定：掉下面，或者跑出屏幕左边
     if(player.y > canvas.height + 80 || player.x + player.w < camX - 100){
